@@ -80,6 +80,7 @@ export class AuthController {
       res.status(201).json({
         success: true,
         user: result.user,
+        sessionToken: result.sessionToken,
         message: 'Muvaffaqiyatli ro‘yxatdan o‘tdingiz! Sizga 100 ta bepul kredit taqdim etildi.',
       });
     } catch (err: any) {
@@ -103,6 +104,7 @@ export class AuthController {
       res.json({
         success: true,
         user: result.user,
+        sessionToken: result.sessionToken,
         priorSessionRevoked: result.priorSessionRevoked,
       });
     } catch (err: any) {

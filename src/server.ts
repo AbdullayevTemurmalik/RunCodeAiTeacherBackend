@@ -8,6 +8,12 @@ import apiRouter from './routes';
 import { SpeakingSocketServer } from './services/ai/speaking.socket';
 import { prisma } from './prisma/client';
 
+// Support BigInt serialization in JSON responses globally
+(BigInt.prototype as any).toJSON = function () {
+  const n = Number(this);
+  return Number.isSafeInteger(n) ? n : this.toString();
+};
+
 const app = express();
 const server = http.createServer(app);
 

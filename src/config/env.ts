@@ -23,9 +23,9 @@ const envSchema = z.object({
 
   EMAIL_PROVIDER: z.string().default('brevo'),
   BREVO_API_KEY: z.string().default(''),
-  BREVO_SENDER_EMAIL: z.string().default('tmaq77@gmail.com'),
+  BREVO_SENDER_EMAIL: z.string().default('aaaatttt933@gmail.com'),
   BREVO_SENDER_NAME: z.string().default('RunCodeAITeacher'),
-  ENABLE_DEV_EMAIL_SIMULATION: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(true),
+  ENABLE_DEV_EMAIL_SIMULATION: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(false),
 
   GEMINIAPIKEY: z.string().optional(),
   GEMINI_API_KEY_PRIMARY: z.string().default(''),

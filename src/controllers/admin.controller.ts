@@ -108,10 +108,10 @@ export class AdminController {
         prisma.user.count({ where }),
       ]);
 
-      const formatted = users.map((u) => ({
+      const formatted = users.map(({ wallet, ...u }) => ({
         ...u,
-        creditBalance: u.wallet ? CreditService.unitsToCredits(u.wallet.balanceUnits) : 0,
-        creditsConsumed: u.wallet ? CreditService.unitsToCredits(u.wallet.lifetimeSpentUnits) : 0,
+        creditBalance: wallet ? CreditService.unitsToCredits(wallet.balanceUnits) : 0,
+        creditsConsumed: wallet ? CreditService.unitsToCredits(wallet.lifetimeSpentUnits) : 0,
       }));
 
       res.json({
@@ -144,17 +144,16 @@ export class AdminController {
       });
       if (!user) return res.status(404).json({ success: false, message: 'Foydalanuvchi topilmadi' });
 
-      const userWallet = (user as any).wallet;
+      const { wallet, passwordHash, ...userClean } = user as any;
       res.json({
         success: true,
         user: {
-          ...user,
-          passwordHash: undefined,
-          creditWallet: userWallet
+          ...userClean,
+          creditWallet: wallet
             ? {
-                balanceCredits: CreditService.unitsToCredits(userWallet.balanceUnits),
-                lifetimeEarned: CreditService.unitsToCredits(userWallet.lifetimeEarnedUnits),
-                lifetimeSpent: CreditService.unitsToCredits(userWallet.lifetimeSpentUnits),
+                balanceCredits: CreditService.unitsToCredits(wallet.balanceUnits),
+                lifetimeEarned: CreditService.unitsToCredits(wallet.lifetimeEarnedUnits),
+                lifetimeSpent: CreditService.unitsToCredits(wallet.lifetimeSpentUnits),
               }
             : null,
         },
