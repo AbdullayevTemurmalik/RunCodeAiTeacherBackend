@@ -208,6 +208,22 @@ export class TypingService {
     // Determine personal performance level
     const personalRating = this.computePersonalRating(wpm, accuracy);
 
+    // Idempotency check: if test was already completed, return existing result
+    const existingResult = await prisma.typingResult.findUnique({
+      where: { testId },
+    });
+    if (existingResult) {
+      return {
+        result: existingResult,
+        wpm: existingResult.wpm,
+        rawWpm: existingResult.rawWpm,
+        cpm: existingResult.cpm,
+        accuracy: existingResult.accuracy,
+        consistency: existingResult.consistency,
+        personalRating: existingResult.personalRating,
+      };
+    }
+
     // Save test result and speed samples in a single transaction
     const result = await prisma.$transaction(async (tx) => {
       // Mark test completed

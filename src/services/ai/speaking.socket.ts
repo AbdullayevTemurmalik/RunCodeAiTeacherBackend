@@ -222,6 +222,8 @@ export class SpeakingSocketServer {
       return;
     }
 
+    const currentSessionId = client.speakingSessionId;
+
     if (!userText || userText.trim().length === 0) {
       return;
     }
@@ -229,7 +231,7 @@ export class SpeakingSocketServer {
     // Save user turn in DB
     await prisma.speakingTurn.create({
       data: {
-        sessionId: client.speakingSessionId,
+        sessionId: currentSessionId,
         speaker: 'user',
         transcript: userText.trim(),
       },
@@ -282,26 +284,30 @@ Output JSON strictly:
 
       client.conversationHistory.push({ role: 'model', parts: parsed.teacherResponse });
 
-      // Save AI turn in DB
-      await prisma.speakingTurn.create({
-        data: {
-          sessionId: client.speakingSessionId,
-          speaker: 'ai',
-          transcript: parsed.teacherResponse,
-          corrections: parsed.hasMistake ? parsed.mistake : undefined,
-        },
-      });
+      // Save AI turn in DB if session is still active
+      if (client.speakingSessionId && client.speakingSessionId === currentSessionId) {
+        await prisma.speakingTurn.create({
+          data: {
+            sessionId: currentSessionId,
+            speaker: 'ai',
+            transcript: parsed.teacherResponse,
+            corrections: parsed.hasMistake ? parsed.mistake : undefined,
+          },
+        });
+      }
 
       if (parsed.hasMistake && parsed.mistake) {
         client.mistakes.push(parsed.mistake);
       }
 
       // Send AI response and any mistake correction to client
-      client.ws.send(JSON.stringify({
-        type: 'AI_RESPONSE',
-        aiText: parsed.teacherResponse,
-        correction: parsed.hasMistake ? parsed.mistake : null,
-      }));
+      if (client.ws.readyState === WebSocket.OPEN) {
+        client.ws.send(JSON.stringify({
+          type: 'AI_RESPONSE',
+          aiText: parsed.teacherResponse,
+          correction: parsed.hasMistake ? parsed.mistake : null,
+        }));
+      }
     } catch (err: any) {
       console.error('[Speaking WS] Gemini error in speech turn:', err);
       client.ws.send(JSON.stringify({
