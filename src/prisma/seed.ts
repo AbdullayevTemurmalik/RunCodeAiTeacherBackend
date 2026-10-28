@@ -57,17 +57,38 @@ async function main() {
   console.log('Credit packages seeded.');
 
   // 2. Default Administrator
-  const adminEmail = 'admin@runcode.uz';
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
+  const adminEmail = env.ADMIN_EMAIL || 'admin@runcode.uz';
+  const adminUsername = env.ADMIN_USERNAME || 'temur';
+  const adminPassword = env.ADMIN_PASSWORD || 'Temur20';
+  const passwordHash = await bcrypt.hash(adminPassword, env.BCRYPT_COST_FACTOR);
+
+  const existingAdmin = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { email: adminEmail },
+        { username: adminUsername },
+        { role: Role.ADMIN },
+      ],
+    },
   });
 
-  if (!existingAdmin) {
-    const passwordHash = await bcrypt.hash('AdminPassword2026!', env.BCRYPT_COST_FACTOR);
+  if (existingAdmin) {
+    await prisma.user.update({
+      where: { id: existingAdmin.id },
+      data: {
+        email: adminEmail,
+        username: adminUsername,
+        passwordHash,
+        role: Role.ADMIN,
+        status: UserStatus.ACTIVE,
+      },
+    });
+    console.log(`Admin user synchronized: username=${adminUsername}, email=${adminEmail}`);
+  } else {
     const adminUser = await prisma.user.create({
       data: {
         email: adminEmail,
-        username: 'admin',
+        username: adminUsername,
         passwordHash,
         firstName: 'Temurmalik',
         lastName: 'Admin',
@@ -93,7 +114,7 @@ async function main() {
       },
     });
 
-    console.log('Admin user created: admin@runcode.uz / AdminPassword2026!');
+    console.log(`Admin user created: username=${adminUsername}, email=${adminEmail}`);
   }
 
   // 3. Payment Provider Settings

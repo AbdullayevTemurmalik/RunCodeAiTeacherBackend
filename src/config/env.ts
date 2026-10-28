@@ -47,6 +47,10 @@ const envSchema = z.object({
   SINGLE_ACTIVE_SESSION: z.preprocess((val) => val === 'true' || val === true, z.boolean()).default(true),
   BCRYPT_COST_FACTOR: z.coerce.number().default(12),
 
+  ADMIN_USERNAME: z.string().default('temur'),
+  ADMIN_PASSWORD: z.string().default('Temur20'),
+  ADMIN_EMAIL: z.string().default('admin@runcode.uz'),
+
   FREE_SIGNUP_CREDITS: z.coerce.number().default(100),
   CREDIT_INTERNAL_UNITS: z.coerce.number().default(1000),
   PAID_USAGE_DISCOUNT_FACTOR: z.coerce.number().default(1.5),
