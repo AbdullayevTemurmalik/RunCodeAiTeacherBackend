@@ -4,6 +4,7 @@ import { prisma } from '../prisma/client';
 import { PaymentService } from '../services/payments/payment.service';
 import { CreditService } from '../services/credits/credit.service';
 import { CreditBucket, UserStatus, PaymentOrderStatus } from '@prisma/client';
+import { hashPassword } from '../utils/crypto';
 import fs from 'fs';
 import path from 'path';
 
@@ -160,6 +161,88 @@ export class AdminController {
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  static async updateUser(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { firstName, lastName, username, email, password, tier, role, status } = req.body;
+
+      const dataToUpdate: any = {};
+      if (firstName !== undefined) dataToUpdate.firstName = String(firstName).trim();
+      if (lastName !== undefined) dataToUpdate.lastName = String(lastName).trim();
+      if (username !== undefined) dataToUpdate.username = String(username).trim().toLowerCase();
+      if (email !== undefined) dataToUpdate.email = String(email).trim().toLowerCase();
+      if (tier !== undefined) dataToUpdate.tier = tier;
+      if (role !== undefined) dataToUpdate.role = role;
+      if (status !== undefined) dataToUpdate.status = status;
+      if (password && typeof password === 'string' && password.trim().length >= 6) {
+        dataToUpdate.passwordHash = await hashPassword(password.trim());
+      }
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: dataToUpdate,
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          username: true,
+          email: true,
+          tier: true,
+          role: true,
+          status: true,
+          createdAt: true,
+        },
+      });
+
+      await prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user!.id,
+          action: 'USER_EDIT',
+          targetType: 'User',
+          targetId: id,
+          details: dataToUpdate,
+        },
+      });
+
+      res.json({ success: true, message: 'Foydalanuvchi ma’lumotlari muvaffaqiyatli yangilandi', user: updated });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  static async deleteUser(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      if (id === req.user!.id) {
+        return res.status(400).json({ success: false, message: 'O‘zingizning profilingizni o‘chira olmaysiz' });
+      }
+
+      await prisma.userSession.updateMany({
+        where: { userId: id },
+        data: { isActive: false, revokedAt: new Date() },
+      });
+
+      const updated = await prisma.user.update({
+        where: { id },
+        data: { status: UserStatus.DELETED },
+      });
+
+      await prisma.adminAuditLog.create({
+        data: {
+          adminId: req.user!.id,
+          action: 'USER_DELETE',
+          targetType: 'User',
+          targetId: id,
+          details: { status: 'DELETED' },
+        },
+      });
+
+      res.json({ success: true, message: 'Foydalanuvchi muvaffaqiyatli o‘chirildi', user: updated });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
     }
   }
 

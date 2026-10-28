@@ -171,7 +171,7 @@ export class PaymentService {
       'Boshqa sabab',
     ];
 
-    if (!validReasons.includes(reason)) {
+    if (!reason || reason.trim().length === 0) {
       throw new Error('Bekor qilish sababi ko‘rsatilmadi');
     }
 

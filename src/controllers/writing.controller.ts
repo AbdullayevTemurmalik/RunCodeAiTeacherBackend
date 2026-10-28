@@ -22,19 +22,34 @@ export class WritingController {
         });
       }
 
-      const checkResult = await GeminiService.liveCheckWriting(
-        text,
-        level || 'B2',
-        topic
-      );
+      try {
+        const checkResult = await GeminiService.liveCheckWriting(
+          text,
+          level || 'B2',
+          topic
+        );
 
+        return res.json({
+          success: true,
+          revision: documentRevision || 1,
+          ...checkResult,
+        });
+      } catch (geminiError: any) {
+        console.warn('[Writing LiveCheck Fallback]: Gemini unavailable or rate-limited. Falling back to local check.', geminiError?.message);
+        const fallback = WritingService.heuristicSpellCheck(text);
+        return res.json({
+          success: true,
+          revision: documentRevision || 1,
+          ...fallback,
+        });
+      }
+    } catch (err: any) {
+      const fallback = WritingService.heuristicSpellCheck(req.body.text || '');
       res.json({
         success: true,
-        revision: documentRevision || 1,
-        ...checkResult,
+        revision: req.body.documentRevision || 1,
+        ...fallback,
       });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
     }
   }
 

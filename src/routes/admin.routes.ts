@@ -8,6 +8,8 @@ router.use(authMiddleware, requireAdmin);
 router.get('/dashboard', AdminController.getDashboard);
 router.get('/users', AdminController.getUsers);
 router.get('/users/:id', AdminController.getUser);
+router.put('/users/:id', AdminController.updateUser);
+router.delete('/users/:id', AdminController.deleteUser);
 router.put('/users/:id/status', AdminController.updateUserStatus);
 router.post('/users/:id/credits', AdminController.adjustCredits);
 
