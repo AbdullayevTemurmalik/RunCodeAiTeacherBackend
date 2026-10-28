@@ -124,6 +124,13 @@ model User {
   paymentOrders      PaymentOrder[]
   auditLogs          AdminAuditLog[]
   aiUsageEvents      AiUsageEvent[]
+  essayTasks         EssayTask[]
+  essayDrafts        EssayDraft[]
+  writingDrafts      WritingDraft[]
+  writingEvaluations WritingEvaluation[]
+  typingTests        TypingTest[]
+  typingResults      TypingResult[]
+  typingStats        TypingUserStats?
 
   @@index([email])
   @@index([username])
@@ -400,37 +407,167 @@ model WritingSubmission {
 
 model EssayTask {
   id              String   @id @default(uuid())
+  userId          String?
   level           String
   category        String
   targetWordCount Int
+  maxWordCount    Int      @default(2000)
   difficulty      String
   title           String
   instructions    String
   requiredWords   Json     // array of strings
+  requiredPhrases Json?    // array of 2-3 word phrases
+  status          String   @default("ACTIVE")
   createdAt       DateTime @default(now())
+  updatedAt       DateTime @default(now()) @updatedAt
 
+  user        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
   submissions EssaySubmission[]
+  drafts      EssayDraft[]
+
+  @@index([userId])
+}
+
+model EssayDraft {
+  id               String   @id @default(uuid())
+  taskId           String
+  userId           String
+  content          String
+  currentWordCount Int      @default(0)
+  updatedAt        DateTime @updatedAt
+
+  task EssayTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
 }
 
 model EssaySubmission {
-  id               String           @id @default(uuid())
-  taskId           String
-  userId           String
-  text             String
-  wordCount        Int
-  matchedWords     Json
-  missingWords     Json
-  status           SubmissionStatus @default(SUBMITTED)
-  overallScore     Float?
-  evaluationResult Json?
-  creditsCharged   Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                String           @id @default(uuid())
+  taskId            String
+  userId            String
+  text              String
+  wordCount         Int
+  matchedWords      Json
+  missingWords      Json
+  matchedPhrases    Json?
+  missingPhrases    Json?
+  status            SubmissionStatus @default(SUBMITTED)
+  overallScore      Float?
+  evaluationResult  Json?
+  evaluationId      String?
+  creditOperationId String?
+  creditsCharged    Int              @default(0)
+  submittedAt       DateTime         @default(now())
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
   task EssayTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   user User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, status])
+}
+
+model WritingDraft {
+  id              String   @id @default(uuid())
+  userId          String
+  content         String
+  mode            String   @default("FREE")
+  targetWordCount Int?
+  revision        Int      @default(1)
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model WritingEvaluation {
+  id                String   @id @default(uuid())
+  userId            String
+  writingId         String?
+  documentRevision  Int      @default(1)
+  evaluatedTextHash String?
+  annotations       Json?
+  suggestions       Json?
+  overallScore      Float?
+  status            String   @default("COMPLETED")
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model TypingTest {
+  id                String    @id @default(uuid())
+  userId            String
+  mode              String    // TIME, WORDS, SENTENCES, CHALLENGE
+  language          String    @default("EN") // EN, UZ
+  difficulty        String    @default("INTERMEDIATE") // BEGINNER, INTERMEDIATE, ADVANCED
+  targetWords       Int?
+  targetSeconds     Int?
+  referenceText     String
+  referenceTextHash String?
+  status            String    @default("PENDING") // PENDING, COMPLETED, ABANDONED
+  startedAt         DateTime?
+  finishedAt        DateTime?
+  createdAt         DateTime  @default(now())
+
+  user    User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  result  TypingResult?
+  samples TypingSpeedSample[]
+
+  @@index([userId, mode])
+}
+
+model TypingResult {
+  id                  String   @id @default(uuid())
+  testId              String   @unique
+  userId              String
+  wpm                 Float
+  rawWpm              Float
+  cpm                 Float
+  accuracy            Float
+  consistency         Float
+  correctCharacters   Int
+  incorrectCharacters Int
+  correctedErrors     Int      @default(0)
+  uncorrectedErrors   Int      @default(0)
+  durationMs          Int
+  personalRating      String   // Beginner, Improving, Good, Very Good, Excellent, Expert
+  completedAt         DateTime @default(now())
+
+  test TypingTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+  user User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, completedAt])
+  @@index([userId, wpm])
+}
+
+model TypingSpeedSample {
+  id        String @id @default(uuid())
+  testId    String
+  elapsedMs Int
+  wpm       Float
+  rawWpm    Float
+
+  test TypingTest @relation(fields: [testId], references: [id], onDelete: Cascade)
+
+  @@index([testId])
+}
+
+model TypingUserStats {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  completedTests  Int      @default(0)
+  bestWpm         Float    @default(0)
+  averageWpm      Float    @default(0)
+  averageAccuracy Float    @default(0)
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model AiEvaluation {

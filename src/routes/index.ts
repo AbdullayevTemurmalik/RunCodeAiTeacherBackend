@@ -9,12 +9,14 @@ import profileRoutes from './profile.routes';
 import settingsRoutes from './settings.routes';
 import notificationRoutes from './notification.routes';
 import adminRoutes from './admin.routes';
+import typingRoutes from './typing.routes';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
 router.use('/payments', paymentRoutes);
 router.use('/writing', writingRoutes);
+router.use('/essay', essayRoutes);
 router.use('/essays', essayRoutes);
 router.use('/speaking', speakingRoutes);
 router.use('/credits', creditsRoutes);
@@ -22,6 +24,7 @@ router.use('/profile', profileRoutes);
 router.use('/settings', settingsRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/admin', adminRoutes);
+router.use('/typing', typingRoutes);
 
 // Health check endpoint
 router.get('/health', (_req, res) => {

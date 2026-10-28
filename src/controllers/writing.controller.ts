@@ -1,9 +1,67 @@
 import { Response } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { WritingService } from '../services/ai/writing.service';
+import { GeminiService } from '../services/ai/gemini.service';
 import { prisma } from '../prisma/client';
 
 export class WritingController {
+  /**
+   * Real-time live grammar & spelling check while typing
+   */
+  static async liveCheck(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { text, level, topic, documentRevision } = req.body;
+
+      if (!text || text.trim().length === 0) {
+        return res.json({
+          success: true,
+          revision: documentRevision || 1,
+          errors: [],
+          verifiedSentences: [],
+          overallStatus: 'EMPTY',
+        });
+      }
+
+      const checkResult = await GeminiService.liveCheckWriting(
+        text,
+        level || 'B2',
+        topic
+      );
+
+      res.json({
+        success: true,
+        revision: documentRevision || 1,
+        ...checkResult,
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Save writing draft
+   */
+  static async saveDraft(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { content, mode, targetWordCount, revision } = req.body;
+      const draft = await prisma.writingDraft.create({
+        data: {
+          userId: req.user!.id,
+          content: content || '',
+          mode: mode || 'FREE',
+          targetWordCount: targetWordCount ? Number(targetWordCount) : null,
+          revision: revision ? Number(revision) : 1,
+        },
+      });
+      res.json({ success: true, draft });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Submit complete writing for evaluation
+   */
   static async submitWriting(req: AuthenticatedRequest, res: Response) {
     try {
       const { text, level, targetWordCount, topicType, topicTitle } = req.body;

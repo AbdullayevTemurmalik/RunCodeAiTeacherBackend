@@ -16,24 +16,43 @@ export class EssayController {
     }
   }
 
+  static async getTask(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const task = await prisma.essayTask.findUnique({
+        where: { id },
+      });
+      if (!task) {
+        return res.status(404).json({ success: false, message: 'Topshiriq topilmadi' });
+      }
+      res.json({ success: true, task });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   static async generateTopic(req: AuthenticatedRequest, res: Response) {
     try {
       const { level, category, wordCount } = req.body;
+      const targetCount = Number(wordCount) || 50;
+
       const topicData = await GeminiService.generateEssayTopic(
         level || 'B1',
         category || 'General',
-        Number(wordCount) || 50
+        targetCount
       );
 
       const task = await prisma.essayTask.create({
         data: {
+          userId: req.user!.id,
           level: level || 'B1',
           category: category || 'General',
-          targetWordCount: Number(wordCount) || 50,
+          targetWordCount: targetCount,
           difficulty: level || 'Intermediate',
           title: topicData.title,
           instructions: topicData.instructions,
           requiredWords: topicData.requiredWords,
+          requiredPhrases: topicData.requiredPhrases,
         },
       });
 
@@ -45,11 +64,12 @@ export class EssayController {
 
   static async validateWords(req: AuthenticatedRequest, res: Response) {
     try {
-      const { text, targetWordCount, requiredWords } = req.body;
+      const { text, targetWordCount, requiredWords, requiredPhrases } = req.body;
       const result = EssayService.validateEssayRequirements(
         text || '',
         Number(targetWordCount) || 30,
-        requiredWords || []
+        requiredWords || [],
+        requiredPhrases || []
       );
       res.json({ success: true, ...result });
     } catch (err: any) {
@@ -57,9 +77,31 @@ export class EssayController {
     }
   }
 
+  static async saveDraft(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const { content } = req.body;
+      const draft = await EssayService.saveDraft(req.user!.id, id, content || '');
+      res.json({ success: true, draft });
+    } catch (err: any) {
+      res.status(400).json({ success: false, message: err.message });
+    }
+  }
+
+  static async getDraft(req: AuthenticatedRequest, res: Response) {
+    try {
+      const id = req.params.id as string;
+      const draft = await EssayService.getDraft(req.user!.id, id);
+      res.json({ success: true, draft });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
   static async submitEssay(req: AuthenticatedRequest, res: Response) {
     try {
-      const { taskId, text } = req.body;
+      const taskId = req.body.taskId || req.params.id;
+      const text = req.body.text || req.body.content;
       if (!taskId || !text) {
         return res.status(400).json({ success: false, message: 'Topshiriq va insho matnini kiriting' });
       }

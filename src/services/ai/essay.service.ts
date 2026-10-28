@@ -8,17 +8,20 @@ export interface VocabularyValidationResult {
   wordCount: number;
   matchedWords: string[];
   missingWords: string[];
+  matchedPhrases: string[];
+  missingPhrases: string[];
   errorMessage?: string;
 }
 
 export class EssayService {
   /**
-   * Deterministic word and mandatory vocabulary validator
+   * Deterministic word and mandatory phrase validator
    */
   static validateEssayRequirements(
     text: string,
     targetWordCount: number,
-    requiredWords: string[]
+    requiredWords: string[] = [],
+    requiredPhrases: string[] = []
   ): VocabularyValidationResult {
     const trimmed = text.trim();
     if (!trimmed) {
@@ -27,7 +30,9 @@ export class EssayService {
         wordCount: 0,
         matchedWords: [],
         missingWords: requiredWords,
-        errorMessage: "Insho matni kiritilmagan",
+        matchedPhrases: [],
+        missingPhrases: requiredPhrases,
+        errorMessage: 'Insho matni kiritilmagan',
       };
     }
 
@@ -35,28 +40,19 @@ export class EssayService {
     const tokens = trimmed.split(/[\s,.;:!?()"\n\r—\-_]+/).filter((t) => t.length > 0);
     const wordCount = tokens.length;
 
-    // Check minimum word count
-    if (wordCount < targetWordCount) {
-      return {
-        isValid: false,
-        wordCount,
-        matchedWords: [],
-        missingWords: requiredWords,
-        errorMessage: `So‘zlar soni yetarli emas. Kamida ${targetWordCount} ta so‘z bo‘lishi kerak (hozirda: ${wordCount} ta).`,
-      };
-    }
+    // Normalize entire text for phrase searches (collapse spaces)
+    const normalizedText = trimmed.toLowerCase().replace(/\s+/g, ' ');
 
-    // Match mandatory vocabulary using strict token boundaries (case-insensitive)
+    // Match mandatory single words using strict token boundaries (case-insensitive)
     const lowerTokens = tokens.map((t) => t.toLowerCase());
     const matchedWords: string[] = [];
     const missingWords: string[] = [];
 
     for (const req of requiredWords) {
       const cleanReq = req.trim().toLowerCase();
-      // Match whole word lemma or standard simple plurals/past tense (e.g. enjoy/enjoys/enjoyed/enjoying)
+      // Match whole word lemma or standard simple plurals/past tense
       const isMatched = lowerTokens.some((tok) => {
         if (tok === cleanReq) return true;
-        // Simple inflection matching: s, ed, ing
         if (tok === `${cleanReq}s` || tok === `${cleanReq}es`) return true;
         if (tok === `${cleanReq}ed` || tok === `${cleanReq}d`) return true;
         if (tok === `${cleanReq}ing`) return true;
@@ -70,13 +66,58 @@ export class EssayService {
       }
     }
 
+    // Match mandatory 2-3 word consecutive phrases
+    const matchedPhrases: string[] = [];
+    const missingPhrases: string[] = [];
+
+    for (const phrase of requiredPhrases) {
+      const cleanPhrase = phrase.trim().toLowerCase();
+      const escaped = cleanPhrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const phraseRegex = new RegExp(`\\b${escaped}\\b`, 'i');
+
+      if (phraseRegex.test(normalizedText)) {
+        matchedPhrases.push(cleanPhrase);
+      } else {
+        missingPhrases.push(cleanPhrase);
+      }
+    }
+
+    // Check minimum word count
+    if (wordCount < targetWordCount) {
+      return {
+        isValid: false,
+        wordCount,
+        matchedWords,
+        missingWords,
+        matchedPhrases,
+        missingPhrases,
+        errorMessage: `So‘zlar soni yetarli emas. Kamida ${targetWordCount} ta so‘z bo‘lishi kerak (hozirda: ${wordCount} ta).`,
+      };
+    }
+
+    // Check missing single words
     if (missingWords.length > 0) {
       return {
         isValid: false,
         wordCount,
         matchedWords,
         missingWords,
+        matchedPhrases,
+        missingPhrases,
         errorMessage: `Quyidagi majburiy so‘zlar inshoda ishlatilmagan: ${missingWords.join(', ')}`,
+      };
+    }
+
+    // Check missing phrases
+    if (missingPhrases.length > 0) {
+      return {
+        isValid: false,
+        wordCount,
+        matchedWords,
+        missingWords,
+        matchedPhrases,
+        missingPhrases,
+        errorMessage: `Quyidagi majburiy iboralar inshoda ishlatilmagan: ${missingPhrases.join(', ')}`,
       };
     }
 
@@ -85,7 +126,44 @@ export class EssayService {
       wordCount,
       matchedWords,
       missingWords: [],
+      matchedPhrases,
+      missingPhrases: [],
     };
+  }
+
+  /**
+   * Save or update essay draft
+   */
+  static async saveDraft(userId: string, taskId: string, content: string) {
+    const tokens = content.trim().split(/[\s,.;:!?()"\n\r—\-_]+/).filter((t) => t.length > 0);
+    const currentWordCount = tokens.length;
+
+    return prisma.essayDraft.upsert({
+      where: {
+        taskId_userId: { taskId, userId },
+      },
+      update: {
+        content,
+        currentWordCount,
+      },
+      create: {
+        taskId,
+        userId,
+        content,
+        currentWordCount,
+      },
+    });
+  }
+
+  /**
+   * Retrieve essay draft
+   */
+  static async getDraft(userId: string, taskId: string) {
+    return prisma.essayDraft.findUnique({
+      where: {
+        taskId_userId: { taskId, userId },
+      },
+    });
   }
 
   /**
@@ -103,17 +181,27 @@ export class EssayService {
 
     const requiredWords: string[] = Array.isArray(task.requiredWords)
       ? (task.requiredWords as string[])
-      : JSON.parse(task.requiredWords as any || '[]');
+      : JSON.parse((task.requiredWords as any) || '[]');
+
+    const requiredPhrases: string[] = Array.isArray(task.requiredPhrases)
+      ? (task.requiredPhrases as string[])
+      : JSON.parse((task.requiredPhrases as any) || '[]');
 
     // 1. Run deterministic validation first
-    const validation = this.validateEssayRequirements(text, task.targetWordCount, requiredWords);
+    const validation = this.validateEssayRequirements(
+      text,
+      task.targetWordCount,
+      requiredWords,
+      requiredPhrases
+    );
+
     if (!validation.isValid) {
       // Throw error WITHOUT deducting any credits!
       throw new Error(validation.errorMessage);
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new Error("Foydalanuvchi topilmadi");
+    if (!user) throw new Error('Foydalanuvchi topilmadi');
 
     const isPaid = user.tier !== 'FREE';
     const estimatedCost = 20; // 20 credits for Essay evaluation
@@ -124,11 +212,12 @@ export class EssayService {
 
     let evaluation: EssayEvaluation;
     try {
-      // 3. Call AI evaluator
+      // 3. Call AI evaluator with sentence-by-sentence analysis
       evaluation = await GeminiService.evaluateEssay(
         text,
         task.title,
         requiredWords,
+        requiredPhrases,
         task.level,
         task.targetWordCount
       );
@@ -154,6 +243,8 @@ export class EssayService {
         wordCount: validation.wordCount,
         matchedWords: validation.matchedWords,
         missingWords: validation.missingWords,
+        matchedPhrases: validation.matchedPhrases,
+        missingPhrases: validation.missingPhrases,
         status: SubmissionStatus.COMPLETED,
         overallScore: evaluation.overallScore,
         evaluationResult: evaluation as any,
